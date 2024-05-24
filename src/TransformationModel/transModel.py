@@ -28,15 +28,17 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.linear_x_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_6 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_7 = torch.nn.Linear(256, 128, device=device)
-        self.linear_x_8 = torch.nn.Linear(128, 3, device=device)
+        self.linear_x_8 = torch.nn.Linear(256, 128, device=device)
+        self.linear_x_9 = torch.nn.Linear(128, 3, device=device)
         self.linear_q_1 = torch.nn.Linear(quaternion_L * 2 * quat_dim + 1, 256, device=device)
         self.linear_q_2 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_3 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_4 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_6 = torch.nn.Linear(256, 256, device=device)
-        self.linear_q_7 = torch.nn.Linear(256, 128, device=device)
-        self.linear_q_8 = torch.nn.Linear(128, 4, device=device)
+        self.linear_q_7 = torch.nn.Linear(256, 256, device=device)
+        self.linear_q_8 = torch.nn.Linear(256, 128, device=device)
+        self.linear_q_9 = torch.nn.Linear(128, 4, device=device)
         self.relu_x_1 = torch.nn.ReLU()
         self.relu_x_2 = torch.nn.ReLU()
         self.relu_x_3 = torch.nn.ReLU()
@@ -44,6 +46,7 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.relu_x_5 = torch.nn.ReLU()
         self.relu_x_6 = torch.nn.ReLU()
         self.relu_x_7 = torch.nn.ReLU()
+        self.relu_x_8 = torch.nn.ReLU()
         self.relu_q_1 = torch.nn.ReLU()
         self.relu_q_2 = torch.nn.ReLU()
         self.relu_q_3 = torch.nn.ReLU()
@@ -51,6 +54,7 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.relu_q_5 = torch.nn.ReLU()
         self.relu_q_6 = torch.nn.ReLU()
         self.relu_q_7 = torch.nn.ReLU()
+        self.relu_q_8 = torch.nn.ReLU()
 
     def forward(self, x, q, t):
         if t == 0:
@@ -74,6 +78,9 @@ class DeformationNetworkSeparate(torch.nn.Module):
         input_x = self.linear_x_7(input_x)
         input_x = self.relu_x_7(input_x)
         input_x = self.linear_x_8(input_x)
+        input_x = self.relu_x_8(input_x)
+        input_x = self.linear_x_9(input_x)
+
 
         higher_q = higher_dim_gamma(q, quaternion_L)
         higher_q = torch.tensor(higher_q.flatten(), dtype=torch.float).to(device)
@@ -93,6 +100,8 @@ class DeformationNetworkSeparate(torch.nn.Module):
         input_q = self.linear_q_7(input_q)
         input_q = self.relu_q_7(input_q)
         input_q = self.linear_q_8(input_q)
+        input_q = self.relu_q_8(input_q)
+        input_q = self.linear_q_9(input_q)
 
         #normalization of q
         input_q = normalize_q_torch(input_q)
@@ -110,8 +119,9 @@ class DeformationNetworkConnected(torch.nn.Module):
         self.linear_4 = torch.nn.Linear(256, 256, device=device)
         self.linear_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_6 = torch.nn.Linear(256, 256, device=device)
-        self.linear_7 = torch.nn.Linear(256, 128, device=device)
-        self.linear_8 = torch.nn.Linear(128, pos_dim + quat_dim, device=device)
+        self.linear_7 = torch.nn.Linear(256, 256, device=device)
+        self.linear_8 = torch.nn.Linear(256, 128, device=device)
+        self.linear_9 = torch.nn.Linear( 128, pos_dim + quat_dim, device=device)
         self.relu_1 = torch.nn.ReLU()
         self.relu_2 = torch.nn.ReLU()
         self.relu_3 = torch.nn.ReLU()
@@ -119,6 +129,7 @@ class DeformationNetworkConnected(torch.nn.Module):
         self.relu_5 = torch.nn.ReLU()
         self.relu_6 = torch.nn.ReLU()
         self.relu_7 = torch.nn.ReLU()
+        self.relu_8 = torch.nn.ReLU()
 
     def forward(self, x, q, t):
         if t == 0:
@@ -144,6 +155,8 @@ class DeformationNetworkConnected(torch.nn.Module):
         input_total = self.linear_7(input_total)
         input_total = self.relu_7(input_total)
         input_total = self.linear_8(input_total)
+        input_total = self.relu_8(input_total)
+        input_total = self.linear_9(input_total)
         out_x, out_q1, out_q2 = torch.split(input_total, pos_dim)
         out_q = torch.cat((out_q1, out_q2))
         out_q = normalize_q_torch(out_q)
