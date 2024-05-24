@@ -1,7 +1,15 @@
 import numpy as np
 from torch import nn
 import torch
-
+'''
+deformation Network model classes.
+Both deformation Networks are based upon nerf MLP architectures. Separate Model is comprised of two separate MLP's.
+Connected model is one MLP. Both Networks take position and quaternion together with a time t. Netoworks calulate
+the deformation or change delta_x and delta_q s.t. the original positions have to be added. i.e. x(t) = x(0) + delta_x
+and q(t) = delta_q * q(0), as per coordinate and quaternion arithmetic. 
+It is assumed that both position and quaternions are normalized. Normalization of delta_q is built in. 
+TODO, check normalization for delta_x.
+'''
 device = 'cuda:0'
 coordinate_L = 10  #as per original nerf paper
 quaternion_L = 15  #no paper exists for this value, trial and error
@@ -19,16 +27,16 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.linear_x_4 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_6 = torch.nn.Linear(256, 256, device=device)
-        self.linear_x_7 = torch.nn.Linear(256, 256, device=device)
-        self.linear_x_8 = torch.nn.Linear(256, 3, device=device)
+        self.linear_x_7 = torch.nn.Linear(256, 128, device=device)
+        self.linear_x_8 = torch.nn.Linear(128, 3, device=device)
         self.linear_q_1 = torch.nn.Linear(quaternion_L * 2 * quat_dim + 1, 256, device=device)
         self.linear_q_2 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_3 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_4 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_q_6 = torch.nn.Linear(256, 256, device=device)
-        self.linear_q_7 = torch.nn.Linear(256, 256, device=device)
-        self.linear_q_8 = torch.nn.Linear(256, 4, device=device)
+        self.linear_q_7 = torch.nn.Linear(256, 128, device=device)
+        self.linear_q_8 = torch.nn.Linear(128, 4, device=device)
         self.relu_x_1 = torch.nn.ReLU()
         self.relu_x_2 = torch.nn.ReLU()
         self.relu_x_3 = torch.nn.ReLU()
@@ -102,8 +110,8 @@ class DeformationNetworkConnected(torch.nn.Module):
         self.linear_4 = torch.nn.Linear(256, 256, device=device)
         self.linear_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_6 = torch.nn.Linear(256, 256, device=device)
-        self.linear_7 = torch.nn.Linear(256, 256, device=device)
-        self.linear_8 = torch.nn.Linear(256, pos_dim + quat_dim, device=device)
+        self.linear_7 = torch.nn.Linear(256, 128, device=device)
+        self.linear_8 = torch.nn.Linear(128, pos_dim + quat_dim, device=device)
         self.relu_1 = torch.nn.ReLU()
         self.relu_2 = torch.nn.ReLU()
         self.relu_3 = torch.nn.ReLU()
