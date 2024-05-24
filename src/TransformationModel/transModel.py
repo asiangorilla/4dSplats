@@ -1,6 +1,7 @@
 import numpy as np
 from torch import nn
 import torch
+
 '''
 deformation Network model classes.
 Both deformation Networks are based upon nerf MLP architectures. Separate Model is comprised of two separate MLP's.
@@ -81,7 +82,6 @@ class DeformationNetworkSeparate(torch.nn.Module):
         input_x = self.relu_x_8(input_x)
         input_x = self.linear_x_9(input_x)
 
-
         higher_q = higher_dim_gamma(q, quaternion_L)
         higher_q = torch.tensor(higher_q.flatten(), dtype=torch.float).to(device)
         input_q = torch.cat((higher_q.clone().detach(), t.clone().detach()), 0)
@@ -121,7 +121,7 @@ class DeformationNetworkConnected(torch.nn.Module):
         self.linear_6 = torch.nn.Linear(256, 256, device=device)
         self.linear_7 = torch.nn.Linear(256, 256, device=device)
         self.linear_8 = torch.nn.Linear(256, 128, device=device)
-        self.linear_9 = torch.nn.Linear( 128, pos_dim + quat_dim, device=device)
+        self.linear_9 = torch.nn.Linear(128, pos_dim + quat_dim, device=device)
         self.relu_1 = torch.nn.ReLU()
         self.relu_2 = torch.nn.ReLU()
         self.relu_3 = torch.nn.ReLU()
