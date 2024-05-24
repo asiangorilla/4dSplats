@@ -119,7 +119,7 @@ class DeformationNetworkConnected(torch.nn.Module):
         higher_q = higher_dim_gamma(q, quaternion_L)
         higher_x = torch.tensor(higher_x.flatten(), dtype=torch.float).to(device)
         higher_q = torch.tensor(higher_q.flatten(), dtype=torch.float).to(device)
-        t = torch.tensor(t, dtype=torch.float).to(device)
+        t = torch.tensor([t], dtype=torch.float).to(device)
         input_total = torch.cat((higher_x.clone().detach(), higher_q.clone().detach(), t.clone().detach()), 0)
         input_total = self.linear_1(input_total)
         input_total = self.relu_1(input_total)
@@ -136,7 +136,8 @@ class DeformationNetworkConnected(torch.nn.Module):
         input_total = self.linear_7(input_total)
         input_total = self.relu_7(input_total)
         input_total = self.linear_8(input_total)
-        out_x, out_q = torch.split(input_total, pos_dim)
+        out_x, out_q1, out_q2 = torch.split(input_total, pos_dim)
+        out_q = torch.cat((out_q1, out_q2))
         out_q = normalize_q_torch(out_q)
         return out_x, out_q
 
