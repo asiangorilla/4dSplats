@@ -6,8 +6,8 @@ import torch
 deformation Network model classes.
 Both deformation Networks are based upon nerf MLP architectures. Separate Model is comprised of two separate MLP's.
 Connected model is one MLP. Both Networks take position and quaternion together with a time t. Networks calculate
-the deformation or change delta_x and delta_q s.t. the original positions have to be added. i.e. x(t) = x(0) + delta_x
-and q(t) = delta_q * q(0), as per coordinate and quaternion arithmetic. 
+the deformation or change delta_x and delta_q s.t. the original positions have to be added. i.e. x(t) = x(0) + delta_x(t)
+and q(t) = delta_q(t) * q(0), as per coordinate and quaternion arithmetic. model calculates delta_x(t) and delta_q(t)
 It is assumed that both position and quaternions are normalized. Normalization of delta_q is built in. 
 TODO, check normalization for delta_x.
 '''
