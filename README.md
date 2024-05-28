@@ -18,7 +18,7 @@ https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
 
 
 Concept of our Model:
-  We want to use gaussian splatting in a similar manner as the dynamic gaussian splats paper (3D Gaussian Splats). But except for having Pixel X Time many gaussians, we want to have pixel many gaussians and save the change of the gaussian with time as a ML function F(t, g) -> g'. 
+  We want to use gaussian splatting in a similar manner as the dynamic gaussian splats paper (3D Gaussian Splats). But except for having Pixel X Time many gaussians, we want to have pixel many gaussians and save the change of the gaussian with time as a ML function F(t, g) -> g(t). 
 
 Idea of Model:
   We combine Gaussian Splats together with dynamic nerf, by using the gaussian splat model with pretrained weights for the initial frame (similar to dynamic gaussians). Using the result from the first frame gaussian splats, we keep the standard deviation, color, opacity logit and the background logit constant. We assume temporal change only for the gaussian centers (x,y,z) and the quaternions (w,x,y,z). For the temporal change, we use another MLP, analogous to the Dynamic-Nerf paper.
