@@ -32,6 +32,23 @@ The base model shown in Diagram 1 shows the calculation of the delta-cartesian, 
 
 Loss function: 
 
+```bash
+# Install rendering code (cuda)
+git clone git@github.com:JonathonLuiten/diff-gaussian-rasterization-w-depth.git
+cd diff-gaussian-rasterization-w-depth
+python setup.py install
+pip install .
+```
+The losses calculated are:
+1. Image Loss (im): Combines L1 loss and SSIM loss for the rendered image.
+2. Segmentation Loss (seg): Combines L1 loss and SSIM loss for the segmentation map.
+3. Rigid Loss (rigid): Measures the deviation in positions between neighboring points.
+4. Rotation Loss (rot): Measures the consistency in rotations between neighboring points.
+5. Isometric Loss (iso): Ensures distances between neighboring points remain consistent.
+6. Floor Constraint Loss (floor): Ensures points do not go below a certain plane (y=0).
+7. Background Points Position and Rotation Loss (bg): Ensures stability of background points' positions and rotations.
+8. Soft Color Consistency Loss (soft_col_cons): Ensures color consistency over time.
+
 
 Gaussian Splat Model -> deformation network:
 
