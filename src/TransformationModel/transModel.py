@@ -11,7 +11,10 @@ and q(t) = delta_q(t) * q(0), as per coordinate and quaternion arithmetic. model
 It is assumed that both position and quaternions are normalized. Normalization of delta_q is built in. 
 TODO, check normalization for delta_x.
 '''
-device = 'cuda:0'
+
+# device = 'cuda:0'
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
 coordinate_L = 10  #as per original nerf paper
 quaternion_L = 15  #no paper exists for this value, trial and error
 pos_dim = 3
@@ -29,7 +32,10 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.linear_x_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_6 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_7 = torch.nn.Linear(256, 128, device=device)
-        self.linear_x_8 = torch.nn.Linear(256, 128, device=device)
+        
+        # self.linear_x_8 = torch.nn.Linear(256, 128, device=device)
+        self.linear_x_8 = torch.nn.Linear(128, 128, device=device)
+
         self.linear_x_9 = torch.nn.Linear(128, 3, device=device)
         self.linear_q_1 = torch.nn.Linear(quaternion_L * 2 * quat_dim + 1, 256, device=device)
         self.linear_q_2 = torch.nn.Linear(256, 256, device=device)
@@ -58,8 +64,11 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.relu_q_8 = torch.nn.ReLU()
 
     def forward(self, x, q, t):
+
         if t == 0:
-            return torch.zeros(pos_dim), torch.zeros(quat_dim)
+            # return torch.zeros(pos_dim), torch.zeros(quat_dim)
+            return torch.zeros(pos_dim).to(device), torch.zeros(quat_dim).to(device)
+        
         t = torch.tensor([t], dtype=torch.float).to(device)
         higher_x = higher_dim_gamma(x, coordinate_L)
         higher_x = torch.tensor(higher_x.flatten(), dtype=torch.float).to(device)
@@ -132,8 +141,11 @@ class DeformationNetworkConnected(torch.nn.Module):
         self.relu_8 = torch.nn.ReLU()
 
     def forward(self, x, q, t):
+
         if t == 0:
-            return torch.zeros(pos_dim), torch.zeros(quat_dim)
+            # return torch.zeros(pos_dim), torch.zeros(quat_dim)
+            return torch.zeros(pos_dim).to(device), torch.zeros(quat_dim).to(device)
+        
         higher_x = higher_dim_gamma(x, coordinate_L)
         higher_q = higher_dim_gamma(q, quaternion_L)
         higher_x = torch.tensor(higher_x.flatten(), dtype=torch.float).to(device)
@@ -164,6 +176,11 @@ class DeformationNetworkConnected(torch.nn.Module):
 
 
 def higher_dim_gamma(p, length_ar):  #as per original nerf paper
+
+    # move tensor into cpu and transform in numpy array
+    if isinstance(p, torch.Tensor):
+        p = p.cpu().numpy()  
+        
     sins = np.sin(np.outer(2 ** np.array(list(range(length_ar))) * np.pi, p))
     coss = np.cos(np.outer(2 ** np.array(list(range(length_ar))) * np.pi, p))
     return np.column_stack((sins, coss))
