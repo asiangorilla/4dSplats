@@ -1,10 +1,18 @@
-import torch
-from math import exp
 import torch.nn.functional as F
-from torch.autograd import Variable
+import torch
+import os
 
+import open3d as o3d
+import numpy as np
+
+from diff_gaussian_rasterization import GaussianRasterizationSettings as Camera
+from torch.autograd import Variable
+from math import exp
 
 def params2rendervar(params):
+    """
+     transfrom params into renderable parameters, which can be accepted by diff gaussian render
+    """
     rendervar = {
         'means3D': params['means3D'],
         'colors_precomp': params['rgb_colors'],
@@ -103,3 +111,176 @@ def weighted_l2_loss_v1(x, y, w):
 
 def weighted_l2_loss_v2(x, y, w):
     return torch.sqrt(((x - y) ** 2).sum(-1) * w + 1e-20).mean()
+
+
+def o3d_knn(pts, num_knn):
+    """
+        k-nearste neighbour
+        return --> indices of k nearst point
+    """
+    indices = []
+    sq_dists = []
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(np.ascontiguousarray(pts, np.float64))
+    pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+    for p in pcd.points:
+        [_, i, d] = pcd_tree.search_knn_vector_3d(p, num_knn + 1)
+        indices.append(i[1:])
+        sq_dists.append(d[1:])
+    return np.array(sq_dists), np.array(indices)
+
+
+def setup_camera(w, h, k, w2c, near=0.01, far=100):
+    fx, fy, cx, cy = k[0][0], k[1][1], k[0][2], k[1][2]
+    w2c = torch.tensor(w2c).cuda().float()
+    cam_center = torch.inverse(w2c)[:3, 3]
+    w2c = w2c.unsqueeze(0).transpose(1, 2)
+    opengl_proj = torch.tensor([[2 * fx / w, 0.0, -(w - 2 * cx) / w, 0.0],
+                                [0.0, 2 * fy / h, -(h - 2 * cy) / h, 0.0],
+                                [0.0, 0.0, far / (far - near), -(far * near) / (far - near)],
+                                [0.0, 0.0, 1.0, 0.0]]).cuda().float().unsqueeze(0).transpose(1, 2)
+    full_proj = w2c.bmm(opengl_proj)
+    cam = Camera(
+        image_height=h,
+        image_width=w,
+        tanfovx=w / (2 * fx),
+        tanfovy=h / (2 * fy),
+        bg=torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda"),
+        scale_modifier=1.0,
+        viewmatrix=w2c,
+        projmatrix=full_proj,
+        sh_degree=0,
+        campos=cam_center,
+        prefiltered=False
+    )
+    return cam
+
+def update_params_and_optimizer(new_params, params, optimizer):
+    for k, v in new_params.items():
+        group = [x for x in optimizer.param_groups if x["name"] == k][0]
+        stored_state = optimizer.state.get(group['params'][0], None)
+
+        stored_state["exp_avg"] = torch.zeros_like(v)
+        stored_state["exp_avg_sq"] = torch.zeros_like(v)
+        del optimizer.state[group['params'][0]]
+
+        group["params"][0] = torch.nn.Parameter(v.requires_grad_(True))
+        optimizer.state[group['params'][0]] = stored_state
+        params[k] = group["params"][0]
+    return params
+
+
+def calc_psnr(img1, img2):
+    mse = ((img1 - img2) ** 2).view(img1.shape[0], -1).mean(1, keepdim=True)
+    return 20 * torch.log10(1.0 / torch.sqrt(mse))
+
+
+def accumulate_mean2d_gradient(variables):
+    variables['means2D_gradient_accum'][variables['seen']] += torch.norm(
+        variables['means2D'].grad[variables['seen'], :2], dim=-1)
+    variables['denom'][variables['seen']] += 1
+    return variables
+
+
+def cat_params_to_optimizer(new_params, params, optimizer):
+    for k, v in new_params.items():
+        group = [g for g in optimizer.param_groups if g['name'] == k][0]
+        stored_state = optimizer.state.get(group['params'][0], None)
+        if stored_state is not None:
+            stored_state["exp_avg"] = torch.cat((stored_state["exp_avg"], torch.zeros_like(v)), dim=0)
+            stored_state["exp_avg_sq"] = torch.cat((stored_state["exp_avg_sq"], torch.zeros_like(v)), dim=0)
+            del optimizer.state[group['params'][0]]
+            group["params"][0] = torch.nn.Parameter(torch.cat((group["params"][0], v), dim=0).requires_grad_(True))
+            optimizer.state[group['params'][0]] = stored_state
+            params[k] = group["params"][0]
+        else:
+            group["params"][0] = torch.nn.Parameter(torch.cat((group["params"][0], v), dim=0).requires_grad_(True))
+            params[k] = group["params"][0]
+    return params
+
+
+def remove_points(to_remove, params, variables, optimizer):
+    to_keep = ~to_remove
+    keys = [k for k in params.keys() if k not in ['cam_m', 'cam_c']]
+    for k in keys:
+        group = [g for g in optimizer.param_groups if g['name'] == k][0]
+        stored_state = optimizer.state.get(group['params'][0], None)
+        if stored_state is not None:
+            stored_state["exp_avg"] = stored_state["exp_avg"][to_keep]
+            stored_state["exp_avg_sq"] = stored_state["exp_avg_sq"][to_keep]
+            del optimizer.state[group['params'][0]]
+            group["params"][0] = torch.nn.Parameter((group["params"][0][to_keep].requires_grad_(True)))
+            optimizer.state[group['params'][0]] = stored_state
+            params[k] = group["params"][0]
+        else:
+            group["params"][0] = torch.nn.Parameter(group["params"][0][to_keep].requires_grad_(True))
+            params[k] = group["params"][0]
+    variables['means2D_gradient_accum'] = variables['means2D_gradient_accum'][to_keep]
+    variables['denom'] = variables['denom'][to_keep]
+    variables['max_2D_radius'] = variables['max_2D_radius'][to_keep]
+    return params, variables
+
+def inverse_sigmoid(x):
+    return torch.log(x / (1 - x))
+
+
+def densify(params, variables, optimizer, i):
+    if i <= 5000:
+        variables = accumulate_mean2d_gradient(variables)
+        grad_thresh = 0.0002
+        if (i >= 500) and (i % 100 == 0):
+            grads = variables['means2D_gradient_accum'] / variables['denom']
+            grads[grads.isnan()] = 0.0
+            to_clone = torch.logical_and(grads >= grad_thresh, (
+                        torch.max(torch.exp(params['log_scales']), dim=1).values <= 0.01 * variables['scene_radius']))
+            new_params = {k: v[to_clone] for k, v in params.items() if k not in ['cam_m', 'cam_c']}
+            params = cat_params_to_optimizer(new_params, params, optimizer)
+            num_pts = params['means3D'].shape[0]
+
+            padded_grad = torch.zeros(num_pts, device="cuda")
+            padded_grad[:grads.shape[0]] = grads
+            to_split = torch.logical_and(padded_grad >= grad_thresh,
+                                         torch.max(torch.exp(params['log_scales']), dim=1).values > 0.01 * variables[
+                                             'scene_radius'])
+            n = 2  # number to split into
+            new_params = {k: v[to_split].repeat(n, 1) for k, v in params.items() if k not in ['cam_m', 'cam_c']}
+            stds = torch.exp(params['log_scales'])[to_split].repeat(n, 1)
+            means = torch.zeros((stds.size(0), 3), device="cuda")
+            samples = torch.normal(mean=means, std=stds)
+            rots = build_rotation(params['unnorm_rotations'][to_split]).repeat(n, 1, 1)
+            new_params['means3D'] += torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1)
+            new_params['log_scales'] = torch.log(torch.exp(new_params['log_scales']) / (0.8 * n))
+            params = cat_params_to_optimizer(new_params, params, optimizer)
+            num_pts = params['means3D'].shape[0]
+
+            variables['means2D_gradient_accum'] = torch.zeros(num_pts, device="cuda")
+            variables['denom'] = torch.zeros(num_pts, device="cuda")
+            variables['max_2D_radius'] = torch.zeros(num_pts, device="cuda")
+            to_remove = torch.cat((to_split, torch.zeros(n * to_split.sum(), dtype=torch.bool, device="cuda")))
+            params, variables = remove_points(to_remove, params, variables, optimizer)
+
+            remove_threshold = 0.25 if i == 5000 else 0.005
+            to_remove = (torch.sigmoid(params['logit_opacities']) < remove_threshold).squeeze()
+            if i >= 3000:
+                big_points_ws = torch.exp(params['log_scales']).max(dim=1).values > 0.1 * variables['scene_radius']
+                to_remove = torch.logical_or(to_remove, big_points_ws)
+            params, variables = remove_points(to_remove, params, variables, optimizer)
+
+            torch.cuda.empty_cache()
+
+        if i > 0 and i % 3000 == 0:
+            new_params = {'logit_opacities': inverse_sigmoid(torch.ones_like(params['logit_opacities']) * 0.01)}
+            params = update_params_and_optimizer(new_params, params, optimizer)
+
+    return params, variables
+
+
+def save_params(output_params, seq, exp):
+    to_save = {}
+    for k in output_params[0].keys():
+        if k in output_params[1].keys():
+            to_save[k] = np.stack([params[k] for params in output_params])
+        else:
+            to_save[k] = output_params[0][k]
+    os.makedirs(f"./output/{exp}/{seq}", exist_ok=True)
+    np.savez(f"./output/{exp}/{seq}/params", **to_save)
