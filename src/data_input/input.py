@@ -1,9 +1,10 @@
 from plyfile import PlyData
 import numpy as np
 import torch
+from transModel import DeformationNetworkSeparate, DeformationNetworkConnected
 
-# read.ply file
-ply_path = 'path_to_your_ply_file.ply'
+# read .ply file
+ply_path = 'F:\\Files\\Project\\point_cloud.ply'
 plydata = PlyData.read(ply_path)
 
 # Extracting point cloud data
@@ -23,15 +24,17 @@ opacities_tensor = torch.tensor(opacities, dtype=torch.float32).cuda()
 scales_tensor = torch.tensor(scales, dtype=torch.float32).cuda()
 rotations_tensor = torch.tensor(rotations, dtype=torch.float32).cuda()
 
-# Passing data to the model
-model_input = {
-    'points': points_tensor,
-    'colors': colors_tensor,
-    'features_rest': features_rest_tensor,
-    'opacities': opacities_tensor,
-    'scales': scales_tensor,
-    'rotations': rotations_tensor
-}
+# Model Instantiation
+model = DeformationNetworkSeparate()  # or DeformationNetworkConnected()
+model = model.cuda()
+
+# Setting of time t
+t = 0
+
+# Passing data to the transmodel
+output_x, output_q = model(points_tensor, rotations_tensor, t)
 
 # output
-output = model(model_input)
+print("Output positions:", output_x)
+print("Output quaternions:", output_q)
+
