@@ -69,7 +69,7 @@ class DeformationNetworkSeparate(torch.nn.Module):
             # return torch.zeros(pos_dim), torch.zeros(quat_dim)
             return torch.zeros(pos_dim).to(device), torch.zeros(quat_dim).to(device)
         
-        t = torch.tensor([t], dtype=torch.float).to(device)
+        t = torch.tensor(t, dtype=torch.float).to(device)
         higher_x = higher_dim_gamma(x, coordinate_L)
         higher_x = torch.tensor(higher_x.flatten(), dtype=torch.float).to(device)
         input_x = torch.cat((higher_x.clone().detach(), t.clone().detach()), 0)
@@ -113,9 +113,9 @@ class DeformationNetworkSeparate(torch.nn.Module):
         input_q = self.linear_q_9(input_q)
 
         #normalization of q
-        input_q = normalize_q_torch(input_q)
+        input_q_2 = nn.functional.normalize(input_q, dim=0)
 
-        return input_x, input_q
+        return input_x, input_q_2, input_q
 
 
 class DeformationNetworkConnected(torch.nn.Module):
@@ -171,8 +171,9 @@ class DeformationNetworkConnected(torch.nn.Module):
         input_total = self.linear_9(input_total)
         out_x, out_q1, out_q2 = torch.split(input_total, pos_dim)
         out_q = torch.cat((out_q1, out_q2))
-        out_q = normalize_q_torch(out_q)
-        return out_x, out_q
+        out_q_2 = nn.functional.normalize(out_q, dim=0)
+
+        return out_x, out_q_2, out_q
 
 
 def higher_dim_gamma(p, length_ar):  #as per original nerf paper
@@ -185,8 +186,3 @@ def higher_dim_gamma(p, length_ar):  #as per original nerf paper
     coss = np.cos(np.outer(2 ** np.array(list(range(length_ar))) * np.pi, p))
     return np.column_stack((sins, coss))
 
-
-def normalize_q_torch(q):  #normalization of quaternion. Only unit quaternions can be interpreted as rotations.
-    norm_q = torch.sum(q ** 2)
-    norm_q = torch.sqrt(norm_q)
-    return q / norm_q
