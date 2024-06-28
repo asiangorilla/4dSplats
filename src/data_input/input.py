@@ -11,7 +11,6 @@ plydata = PlyData.read(ply_path)
 vertex_data = plydata['vertex'].data
 points = np.vstack([vertex_data['x'], vertex_data['y'], vertex_data['z']]).T
 colors = np.vstack([vertex_data['f_dc_0'], vertex_data['f_dc_1'], vertex_data['f_dc_2']]).T
-features_rest = np.vstack([vertex_data['f_rest_{}'.format(i)] for i in range(45)]).T
 opacities = vertex_data['opacity']
 scales = np.vstack([vertex_data['scale_0'], vertex_data['scale_1'], vertex_data['scale_2']]).T
 rotations = np.vstack([vertex_data['rot_0'], vertex_data['rot_1'], vertex_data['rot_2'], vertex_data['rot_3']]).T
@@ -19,7 +18,6 @@ rotations = np.vstack([vertex_data['rot_0'], vertex_data['rot_1'], vertex_data['
 # Converting Data to PyTorch Tensor
 points_tensor = torch.tensor(points, dtype=torch.float32).cuda()
 colors_tensor = torch.tensor(colors, dtype=torch.float32).cuda()
-features_rest_tensor = torch.tensor(features_rest, dtype=torch.float32).cuda()
 opacities_tensor = torch.tensor(opacities, dtype=torch.float32).cuda()
 scales_tensor = torch.tensor(scales, dtype=torch.float32).cuda()
 rotations_tensor = torch.tensor(rotations, dtype=torch.float32).cuda()
