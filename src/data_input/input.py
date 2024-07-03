@@ -1,11 +1,12 @@
 from plyfile import PlyData
 import numpy as np
 import torch
+import os
 from src.TransformationModel.transModel import (DeformationNetworkSeparate, DeformationNetworkBilinearCombination,
                                                 DeformationNetworkCompletelyConnected)
 
 # read .ply file
-ply_path = 'F:\\Files\\Project\\point_cloud.ply'
+ply_path = os.path.join('..', '..', 'gaussian_ply_files', 'sample_video', 'frame_1', 'splat.ply')  #I think its better to change this to relative path
 plydata = PlyData.read(ply_path)
 
 # Extracting point cloud data
@@ -28,7 +29,7 @@ model = DeformationNetworkSeparate()  # or DeformationNetworkConnected()
 model = model.cuda()
 
 # Setting of time t
-t = 0
+t = 1
 
 # Passing data to the transmodel
 output_x, output_q = model(points_tensor, rotations_tensor, t)
