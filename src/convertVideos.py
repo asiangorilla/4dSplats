@@ -1,4 +1,6 @@
-import os, argparse
+import argparse
+import os
+import shutil
 
 SAMPLE_VIDEO_DIRECTORY = os.path.join(os.path.abspath(''), 'data', '171204_pose1_sample', 'hdVideos')
 VID_FILE_NAME_BASE = 'hd_00_'
@@ -55,6 +57,7 @@ for ind, file in enumerate(os.listdir(directory_inp)):
                   '--data ' + os.path.join(args.input_path, filename) +
                   ' --output-dir ' + os.path.join(OUTPUT_FOLDER_BASE, 'vid' + str(ind)))
 
+
 '''
 for j in range(FRAME_NUM):
     current_output = ''
@@ -88,14 +91,18 @@ directory_out_base = os.fsencode(OUTPUT_FOLDER_BASE)
 for ind, folder in enumerate(os.listdir(directory_out_base)):
     folder_name = os.fsdecode(folder)
     vid_num = folder_name.replace('vid', '')
-    for ind_2, image_file in enumerate(os.listdir(folder_name)):
+    for ind_2, image_file in enumerate(os.listdir(os.path.join(OUTPUT_FOLDER_BASE, folder_name, IMAGE_FILES[0]))):
         image_file_name = os.fsdecode(image_file)
         frame_num = image_file_name.split('.')[0].split('_')[1]
-        print('copy ' + os.path.join(OUTPUT_FOLDER_BASE + folder_name, IMAGE_FILES[0], image_file_name) + ' '
-              + os.path.join(OUTPUT_FOLDER_ORDERED + 'vid_frame' + frame_num, 'frame_from_' + vid_num + '.png'))
-        os.system('copy ' + os.path.join(OUTPUT_FOLDER_BASE + folder_name, IMAGE_FILES[0], image_file_name) + ' '
-                  + os.path.join(OUTPUT_FOLDER_ORDERED, 'vid_frame' + frame_num, 'frame_from_' + vid_num + '.png'))
+        if vid_num == str(0):
+            print('mkdir ' + os.path.join(OUTPUT_FOLDER_ORDERED, folder_name, IMAGE_FILES[0]))
+            os.system('mkdir ' + os.path.join(OUTPUT_FOLDER_ORDERED, 'vid_frame' + frame_num))
 
+        print('copy ' + os.path.join(OUTPUT_FOLDER_BASE, folder_name, IMAGE_FILES[0], image_file_name) + ' '
+              + os.path.join(OUTPUT_FOLDER_ORDERED, 'vid_frame' + frame_num, 'frame_from_' + vid_num + '.png'))
+        os.system('copy ' + os.path.join(OUTPUT_FOLDER_BASE, folder_name, IMAGE_FILES[0], image_file_name) + ' '
+                  + os.path.join(OUTPUT_FOLDER_ORDERED, 'vid_frame' + frame_num, 'frame_from_' + vid_num + '.png'))
+#shutil.rmtree(OUTPUT_FOLDER_BASE)
 '''
 for j in range(FRAME_NUM):
     current_input = ''
@@ -122,13 +129,13 @@ for folder in os.listdir(directory_out_ordered):
     print('ns-process-data images --matching-method exhaustive --data ' +
           OUTPUT_FOLDER_ORDERED + os.fsdecode(folder)
           + ' --output-dir '
-          + OUTPUT_FOLDER_COLMAP + 'colmap_' +
-          os.fsdecode(folder).split('_')[1].replace('frame', ''))
+          + os.path.join(OUTPUT_FOLDER_COLMAP, 'colmap_' +
+                         os.fsdecode(folder).split('_')[1].replace('frame', '')))
     os.system('ns-process-data images --matching-method exhaustive --data ' +
               os.path.join(OUTPUT_FOLDER_ORDERED, os.fsdecode(folder))
               + ' --output-dir '
-              + OUTPUT_FOLDER_COLMAP + 'colmap_' +
-              os.fsdecode(folder).split('_')[1].replace('frame', ''))
+              + os.path.join(OUTPUT_FOLDER_COLMAP, 'colmap_' +
+                             os.fsdecode(folder).split('_')[1].replace('frame', '')))
 '''
 for j in range(FRAME_NUM):
     current_input = ''
@@ -152,7 +159,6 @@ for folder in os.listdir(directory_out_colmap):
           + OUTPUT_FOLDER_MODEL + ' --save-only-latest-checkpoint False --viewer.quit-on-train-completion True')
     os.system('ns-train splatfacto --data ' + os.path.join(OUTPUT_FOLDER_COLMAP, folder_name) + ' --output-dir '
               + OUTPUT_FOLDER_MODEL + ' --save-only-latest-checkpoint False --viewer.quit-on-train-completion True')
-
 '''
 for j in range(FRAME_NUM):
     current_output = SPLATS_OUTPUT + '_' + str(j + 1)
