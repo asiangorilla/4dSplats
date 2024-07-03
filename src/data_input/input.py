@@ -1,7 +1,8 @@
 from plyfile import PlyData
 import numpy as np
 import torch
-from transModel import DeformationNetworkSeparate, DeformationNetworkConnected
+from src.TransformationModel.transModel import (DeformationNetworkSeparate, DeformationNetworkBilinearCombination,
+                                                DeformationNetworkCompletelyConnected)
 
 # read .ply file
 ply_path = 'F:\\Files\\Project\\point_cloud.ply'
