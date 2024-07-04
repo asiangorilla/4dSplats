@@ -5,6 +5,7 @@ import os
 from src.TransformationModel.transModel import (DeformationNetworkSeparate, DeformationNetworkBilinearCombination,
                                                 DeformationNetworkCompletelyConnected)
 
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 # read .ply file
 ply_path = os.path.join('..', '..', 'gaussian_ply_files', 'sample_video', 'frame_1', 'splat.ply')  #I think its better to change this to relative path
 plydata = PlyData.read(ply_path)
@@ -18,15 +19,15 @@ scales = np.vstack([vertex_data['scale_0'], vertex_data['scale_1'], vertex_data[
 rotations = np.vstack([vertex_data['rot_0'], vertex_data['rot_1'], vertex_data['rot_2'], vertex_data['rot_3']]).T
 
 # Converting Data to PyTorch Tensor
-points_tensor = torch.tensor(points, dtype=torch.float32).cuda()
-colors_tensor = torch.tensor(colors, dtype=torch.float32).cuda()
-opacities_tensor = torch.tensor(opacities, dtype=torch.float32).cuda()
-scales_tensor = torch.tensor(scales, dtype=torch.float32).cuda()
-rotations_tensor = torch.tensor(rotations, dtype=torch.float32).cuda()
+points_tensor = torch.tensor(points, dtype=torch.float32).to(device)
+colors_tensor = torch.tensor(colors, dtype=torch.float32).to(device)
+opacities_tensor = torch.tensor(opacities, dtype=torch.float32).to(device)
+scales_tensor = torch.tensor(scales, dtype=torch.float32).to(device)
+rotations_tensor = torch.tensor(rotations, dtype=torch.float32).to(device)
 
 # Model Instantiation
-model = DeformationNetworkSeparate()  # or DeformationNetworkConnected()
-model = model.cuda()
+model = DeformationNetworkSeparate() # or DeformationNetworkConnected()
+model = model.to(device)
 
 # Setting of time t
 t = 1
