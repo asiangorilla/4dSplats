@@ -34,7 +34,7 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.linear_x_4 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_6 = torch.nn.Linear(256, 256, device=device)
-        self.linear_x_7 = torch.nn.Linear(256, 128, device=device)
+        self.linear_x_7 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_8 = torch.nn.Linear(256, 128, device=device)
         self.linear_x_9 = torch.nn.Linear(128, 3, device=device)
 
@@ -48,18 +48,17 @@ class DeformationNetworkSeparate(torch.nn.Module):
         self.linear_q_8 = torch.nn.Linear(256, 128, device=device)
         self.linear_q_9 = torch.nn.Linear(128, 4, device=device)
 
-        self.relu = torch.nn.ReLU
+        self.relu = torch.nn.ReLU()
 
     def forward(self, x, q, t):
-
         if t == 0:
             # return torch.zeros(pos_dim), torch.zeros(quat_dim)
             return torch.zeros(pos_dim).to(device), torch.zeros(quat_dim).to(device)
-        
+
         t = torch.tensor(t, dtype=torch.float).to(device)
         higher_x = higher_dim_gamma(x, coordinate_L)
-        higher_x = torch.tensor(higher_x.flatten(), dtype=torch.float).to(device)
-        input_x = torch.cat((higher_x.clone().detach(), t.clone().detach()), 0)
+        higher_x = torch.tensor(higher_x, dtype=torch.float).to(device).flatten(start_dim=1)
+        input_x = torch.hstack((higher_x.clone().detach(), torch.ones(higher_x.shape[0])[None, :].T.to(device) * t))
         input_x = self.linear_x_1(input_x)
         input_x = self.relu(input_x)
         input_x = self.linear_x_2(input_x)
@@ -79,8 +78,8 @@ class DeformationNetworkSeparate(torch.nn.Module):
         input_x = self.linear_x_9(input_x)
 
         higher_q = higher_dim_gamma(q, quaternion_L)
-        higher_q = torch.tensor(higher_q.flatten(), dtype=torch.float).to(device)
-        input_q = torch.cat((higher_q.clone().detach(), t.clone().detach()), 0)
+        higher_q = torch.tensor(higher_q, dtype=torch.float).to(device).flatten(start_dim=1)
+        input_q = torch.hstack((higher_q.clone().detach(), torch.ones(higher_q.shape[0])[None, :].T.to(device) * t))
         input_q = self.linear_q_1(input_q)
         input_q = self.relu(input_q)
         input_q = self.linear_q_2(input_q)
@@ -102,7 +101,7 @@ class DeformationNetworkSeparate(torch.nn.Module):
         #normalization of q
         input_q_2 = nn.functional.normalize(input_q, dim=0)
 
-        return input_x, input_q_2, input_q
+        return input_x, input_q_2
 
 
 class DeformationNetworkCompletelyConnected(torch.nn.Module):
@@ -121,17 +120,17 @@ class DeformationNetworkCompletelyConnected(torch.nn.Module):
         self.relu = torch.nn.ReLU()
 
     def forward(self, x, q, t):
-
         if t == 0:
             # return torch.zeros(pos_dim), torch.zeros(quat_dim)
             return torch.zeros(pos_dim).to(device), torch.zeros(quat_dim).to(device)
-        
+
         higher_x = higher_dim_gamma(x, coordinate_L)
         higher_q = higher_dim_gamma(q, quaternion_L)
-        higher_x = torch.tensor(higher_x.flatten(), dtype=torch.float).to(device)
-        higher_q = torch.tensor(higher_q.flatten(), dtype=torch.float).to(device)
-        t = torch.tensor([t], dtype=torch.float).to(device)
-        input_total = torch.cat((higher_x.clone().detach(), higher_q.clone().detach(), t.clone().detach()), 0)
+        higher_x = torch.tensor(higher_x, dtype=torch.float).to(device).flatten(start_dim=1)
+        higher_q = torch.tensor(higher_q, dtype=torch.float).to(device).flatten(start_dim=1)
+        input_total = torch.hstack((higher_x.clone().detach(), higher_q.clone().detach()))
+        input_total = torch.hstack(
+            (input_total.clone().detach(), torch.ones(input_total.shape[0])[None, :].T.to(device) * t))
         input_total = self.linear_1(input_total)
         input_total = self.relu(input_total)
         input_total = self.linear_2(input_total)
@@ -149,11 +148,12 @@ class DeformationNetworkCompletelyConnected(torch.nn.Module):
         input_total = self.linear_8(input_total)
         input_total = self.relu(input_total)
         input_total = self.linear_9(input_total)
-        out_x, out_q1, out_q2 = torch.split(input_total, pos_dim)
-        out_q = torch.cat((out_q1, out_q2))
-        out_q_2 = nn.functional.normalize(out_q, dim=0)
+        out = torch.split(input_total, pos_dim, dim=1)
+        out_x = out[0]
+        out_q = torch.hstack((out[1], out[2]))
+        out_q_2 = nn.functional.normalize(out_q, dim=1)
 
-        return out_x, out_q_2, out_q
+        return out_x, out_q_2
 
 
 class DeformationNetworkBilinearCombination(torch.nn.Module):
@@ -166,7 +166,7 @@ class DeformationNetworkBilinearCombination(torch.nn.Module):
         self.linear_x_4 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_5 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_6 = torch.nn.Linear(256, 256, device=device)
-        self.linear_x_7 = torch.nn.Linear(256, 128, device=device)
+        self.linear_x_7 = torch.nn.Linear(256, 256, device=device)
         self.linear_x_8 = torch.nn.Linear(256, 128, device=device)
 
         self.linear_q_1 = torch.nn.Linear(quaternion_L * 2 * quat_dim + 1, 256, device=device)
@@ -189,8 +189,8 @@ class DeformationNetworkBilinearCombination(torch.nn.Module):
 
         t = torch.tensor(t, dtype=torch.float).to(device)
         higher_x = higher_dim_gamma(x, coordinate_L)
-        higher_x = torch.tensor(higher_x.flatten(), dtype=torch.float).to(device)
-        input_x = torch.cat((higher_x.clone().detach(), t.clone().detach()), 0)
+        higher_x = torch.tensor(higher_x, dtype=torch.float).to(device).flatten(start_dim=1)
+        input_x = torch.hstack((higher_x.clone().detach(), torch.ones(higher_x.shape[0])[None, :].T.to(device) * t))
         input_x = self.linear_x_1(input_x)
         input_x = self.relu(input_x)
         input_x = self.linear_x_2(input_x)
@@ -209,8 +209,8 @@ class DeformationNetworkBilinearCombination(torch.nn.Module):
         input_x = self.relu(input_x)
 
         higher_q = higher_dim_gamma(q, quaternion_L)
-        higher_q = torch.tensor(higher_q.flatten(), dtype=torch.float).to(device)
-        input_q = torch.cat((higher_q.clone().detach(), t.clone().detach()), 0)
+        higher_q = torch.tensor(higher_q, dtype=torch.float).to(device).flatten(start_dim=1)
+        input_q = torch.hstack((higher_q.clone().detach(), torch.ones(higher_q.shape[0])[None, :].T.to(device) * t))
         input_q = self.linear_q_1(input_q)
         input_q = self.relu(input_q)
         input_q = self.linear_q_2(input_q)
@@ -230,20 +230,36 @@ class DeformationNetworkBilinearCombination(torch.nn.Module):
 
         input_total = self.bilin_end(input_x, input_q)
 
-        out_x, out_q1, out_q2 = torch.split(input_total, pos_dim)
-        out_q = torch.cat((out_q1, out_q2))
-        out_q_2 = nn.functional.normalize(out_q, dim=0)
+        out = torch.split(input_total, pos_dim, dim=1)
+        out_x = out[0]
+        out_q = torch.hstack((out[1], out[2]))
+        out_q_2 = nn.functional.normalize(out_q, dim=1)
 
-        return out_x, out_q_2, out_q
+        return out_x, out_q_2
 
 
 def higher_dim_gamma(p, length_ar):  #as per original nerf paper
 
     # move tensor into cpu and transform in numpy array
     if isinstance(p, torch.Tensor):
-        p = p.cpu().numpy()  
-        
-    sins = np.sin(np.outer(2 ** np.array(list(range(length_ar))) * np.pi, p))
-    coss = np.cos(np.outer(2 ** np.array(list(range(length_ar))) * np.pi, p))
-    return np.column_stack((sins, coss))
+        p = p.cpu().numpy()
+    # find dimension with 3 (N, 3)
+    #expected shape (N, 3)
+    if not len(p.shape) == 2:
+        raise RuntimeError('shape in forward call needs to have 2 dimensions')
+    if not (p.shape[1] == 3 or p.shape[1] == 4):
+        raise RuntimeError('shape in forward call has wrong dimension. Shape should be (N, 3/4')
+    # expand it  (N,3) -> (N, 3, exp)
+    help_sin = np.empty((p.shape[0], p.shape[1], length_ar))
+    help_cos = np.empty((p.shape[0], p.shape[1], length_ar))
+    expanded = np.empty((p.shape[0], p.shape[1], 2 * length_ar))
+    for i, row in enumerate(p):
+        help_sin[i] = np.sin(np.outer(row, 2 ** np.array(list(range(length_ar))) * np.pi))
+        help_cos[i] = np.cos(np.outer(row, 2 ** np.array(list(range(length_ar))) * np.pi))
 
+    for i in range(p.shape[0]):
+        for j in range(3):
+            expanded[i][j] = np.concatenate((np.array([help_sin[i][j]]).T,
+                                             np.array([help_cos[i][j]]).T), axis=1).flatten()
+
+    return expanded
