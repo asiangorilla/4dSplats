@@ -81,7 +81,8 @@ for epoch in range(epochs):
     scales = scales_tensor
     colors = colors_tensor
     opacities = opacities_tensor
-    width, height = w, h
+    viewmats = torch.eye(4, device=device)[None, :, :]
+    Ks = torch.tensor([[300., 0., 150.], [0., 300., 100.], [0., 0., 1.]], device=device)[None, :, :]
 
     # Randomly generate rendered_rgb and rendered_alphas for testing
     # rendered_rgb = torch.rand((1, h, w, 3), device=device, requires_grad=True)
