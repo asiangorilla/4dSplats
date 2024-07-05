@@ -1,74 +1,107 @@
 import numpy as np
+from PIL import Image
 import torch
-import torch.nn.functional as F
-
-from TransformationModel.transModel import DeformationNetworkCompletelyConnected
-from gsplat.rendering import rasterization
-from LossFunction.utils import calc_ssim
+import os
+from TransformationModel.transModel import (DeformationNetworkSeparate, DeformationNetworkBilinearCombination,
+                                            DeformationNetworkCompletelyConnected)
 
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-model = DeformationNetworkCompletelyConnected().to(device)
+
+
+def extract_image_data(image_path):
+
+    image = Image.open(image_path)
+    width, height = image.size
+    image_np = np.array(image)
+    if image_np.shape[2] == 4:
+        rgb_data = image_np[:, :, :3]
+        alpha_data = image_np[:, :, 3]
+    else:
+        rgb_data = image_np
+        alpha_data = None
+
+    if alpha_data is not None:
+        gt_image = np.dstack((rgb_data, alpha_data))
+    else:
+        gt_image = rgb_data
+
+    gt_image_tensor = torch.tensor(gt_image, dtype=torch.float32).to(device)
+
+    return gt_image_tensor, width, height
+
+
+def load_ply_data(ply_path, device='cpu'):
+    from plyfile import PlyData
+    # read .ply file
+    plydata = PlyData.read(ply_path)
+
+    # Extracting point cloud data
+    vertex_data = plydata['vertex'].data
+    points = np.vstack([vertex_data['x'], vertex_data['y'], vertex_data['z']]).T
+    colors = np.vstack([vertex_data['f_dc_0'], vertex_data['f_dc_1'], vertex_data['f_dc_2']]).T
+    opacities = vertex_data['opacity']
+    scales = np.vstack([vertex_data['scale_0'], vertex_data['scale_1'], vertex_data['scale_2']]).T
+    rotations = np.vstack([vertex_data['rot_0'], vertex_data['rot_1'], vertex_data['rot_2'], vertex_data['rot_3']]).T
+
+    # Converting Data to PyTorch Tensor
+    points_tensor = torch.tensor(points, dtype=torch.float32, requires_grad=True).to(device)
+    colors_tensor = torch.tensor(colors, dtype=torch.float32, requires_grad=True).to(device)
+    opacities_tensor = torch.tensor(opacities, dtype=torch.float32, requires_grad=True).to(device)
+    scales_tensor = torch.tensor(scales, dtype=torch.float32, requires_grad=True).to(device)
+    rotations_tensor = torch.tensor(rotations, dtype=torch.float32, requires_grad=True).to(device)
+
+    return points_tensor, colors_tensor, opacities_tensor, scales_tensor, rotations_tensor
+
+
+ply_path = os.path.join('..', 'gaussian_ply_files', 'sample_video', 'frame_1', 'splat.ply')
+points_tensor, colors_tensor, opacities_tensor, scales_tensor, rotations_tensor = load_ply_data(ply_path, device)
+
+# timestamp and ground truth image
+t = 1
+image_path = 'gt_image.png'  # !!!!!  here! replace by path of 1st frame ground truth image !!!!!!!
+gt_image_tensor, w, h = extract_image_data(image_path)
+
+
+model = DeformationNetworkSeparate().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-# randomly generate original parameters
-x = np.random.randn(100, 3)
-q = np.random.randn(100, 4)
-t = np.arange(1, 101)
-x_tensor = torch.tensor(x, dtype=torch.float).to(device)
-q_tensor = torch.tensor(q, dtype=torch.float).to(device)
-t_tensor = torch.tensor(t, dtype=torch.float).to(device)
+# Training loop
+epochs = 1
+for epoch in range(epochs):
+    model.train()
 
-# randomly generate target data
-target_colors = torch.rand((1, 3, 200, 300), device=device)
-target_alphas = torch.rand((1, 1, 200, 300), device=device)
+    optimizer.zero_grad()
 
+    output_x, output_q = model(points_tensor.detach(), rotations_tensor.detach(), t)
 
-output_x, output_q_normalized, output_q = model(x_tensor, q_tensor, t_tensor)
-means = output_x + x_tensor
-quats = output_q_normalized + q_tensor
+    # Update means and quats
+    means = points_tensor + output_x
+    quats = rotations_tensor + output_q
+    scales = scales_tensor
+    colors = colors_tensor
+    opacities = opacities_tensor
+    width, height = w, h
 
-# rendering process
-scales = torch.rand((100, 3), device=device) * 0.1
-colors = torch.rand((100, 3), device=device)
-opacities = torch.rand((100,), device=device)
-viewmats = torch.eye(4, device=device)[None, :, :]
-Ks = torch.tensor([
-    [300., 0., 150.],
-    [0., 300., 100.],
-    [0., 0., 1.]
-], device=device)[None, :, :]
-colors, alphas, meta = rasterization(means, quats, scales, opacities, colors, viewmats, Ks, 300, 200)
-print(colors.shape, alphas.shape)
-print(meta)
+    # Randomly generate rendered_rgb and rendered_alphas for testing
+    # rendered_rgb = torch.rand((1, h, w, 3), device=device, requires_grad=True)
+    # rendered_alphas = torch.rand((1, h, w, 1), device=device, requires_grad=True)
+    rendered_rgb, rendered_alphas, meta = rasterization(means, quats, scales, opacities, colors, viewmats, Ks, w, h)
 
-# adjust dimension
-rendered_colors = colors.permute(0, 3, 1, 2)  # [B, C, H, W]
-rendered_alphas = alphas.permute(0, 3, 1, 2)
+    rendered_rgb = rendered_rgb.squeeze(0)
+    rendered_alphas = rendered_alphas.squeeze(0)
+    rendered_image = torch.cat((rendered_rgb, rendered_alphas), dim=-1)
 
-# L1 loss
-l1_color_loss = F.l1_loss(rendered_colors, target_colors)
-l1_alpha_loss = F.l1_loss(rendered_alphas, target_alphas)
-print("l1_color_loss：", l1_color_loss)
-print("l1_alpha_loss：", l1_alpha_loss)
-print("l1 loss -- done")
+    # Ensure shapes match
+    assert gt_image_tensor.shape == rendered_image.shape, "Shapes of ground truth image and rendered image do not match"
 
-# SSIM loss
-ssim_color_loss = 1.0 - calc_ssim(rendered_colors, target_colors)
-ssim_alpha_loss = 1.0 - calc_ssim(rendered_alphas, target_alphas)
-print("ssim_color_loss:", ssim_color_loss)
-print("ssim_alpha_loss:", ssim_alpha_loss)
-print("ssim loss -- done")
+    l1_loss = torch.mean(torch.abs(gt_image_tensor - rendered_image))
 
-# Total loss
-total_loss = l1_color_loss + l1_alpha_loss + ssim_color_loss + ssim_alpha_loss
+    l1_loss.backward()
+    optimizer.step()
 
-if torch.isnan(total_loss).any() or torch.isinf(total_loss).any():
-    print("Total loss contains NaN or Inf!")
-else:
-    print("Total loss is valid.")
+    print(f'Epoch [{epoch + 1}/{epochs}], Loss: {l1_loss.item()}')
 
-print("Total loss before backward:", total_loss)
 
 
 
