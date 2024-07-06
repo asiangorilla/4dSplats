@@ -61,6 +61,8 @@ points_tensor, colors_tensor, opacities_tensor, scales_tensor, rotations_tensor 
 t = 1
 image_path = 'gt_image.png'  # !!!!!  here! replace by path of 1st frame ground truth image !!!!!!!
 gt_image_tensor, w, h = extract_image_data(image_path)
+num_channels = gt_image_tensor.shape[-1]
+
 
 
 model = DeformationNetworkSeparate().to(device)
@@ -91,10 +93,14 @@ for epoch in range(epochs):
 
     rendered_rgb = rendered_rgb.squeeze(0)
     rendered_alphas = rendered_alphas.squeeze(0)
-    rendered_image = torch.cat((rendered_rgb, rendered_alphas), dim=-1)
+    if num_channels == 4 :
+        # image with alpha channel
+        rendered_image = torch.cat((rendered_rgb, rendered_alphas), dim=-1)
+    else:
+        rendered_image = rendered_rgb.squeeze(0)
 
     # Ensure shapes match
-    assert gt_image_tensor.shape == rendered_image.shape, "Shapes of ground truth image and rendered image do not match"
+    assert gt_image_tensor.shape == rendered_rgb.shape, "Shapes of ground truth image and rendered image do not match"
 
     l1_loss = torch.mean(torch.abs(gt_image_tensor - rendered_image))
 
