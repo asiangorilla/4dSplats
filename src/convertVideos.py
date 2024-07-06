@@ -2,6 +2,11 @@ import argparse
 import os
 import shutil
 
+'''
+command line command 
+python convertVideos.py -o OUTPUT_PATH -i VIDEOPATH
+'''
+
 SAMPLE_VIDEO_DIRECTORY = os.path.join(os.path.abspath(''), 'data', '171204_pose1_sample', 'hdVideos')
 VID_FILE_NAME_BASE = 'hd_00_'
 OUTPUT_FOLDER = os.path.join(os.path.abspath(''), 'data_processed')
