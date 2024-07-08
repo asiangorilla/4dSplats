@@ -4,13 +4,13 @@ import torch
 import os
 from TransformationModel.transModel import (DeformationNetworkSeparate, DeformationNetworkBilinearCombination,
                                             DeformationNetworkCompletelyConnected)
-
+from gsplat.rendering import rasterization
+import json
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 
 def extract_image_data(image_path):
-
     image = Image.open(image_path)
     width, height = image.size
     image_np = np.array(image)
@@ -53,17 +53,35 @@ def load_ply_data(ply_path, device='cpu'):
 
     return points_tensor, colors_tensor, opacities_tensor, scales_tensor, rotations_tensor
 
-
-ply_path = os.path.join('..', 'gaussian_ply_files', 'sample_video', 'frame_1', 'splat.ply')
+ply_path = os.path.join('..', 'gaussian_splats', 'gaussians', 'frame_00002', 'splat.ply')
 points_tensor, colors_tensor, opacities_tensor, scales_tensor, rotations_tensor = load_ply_data(ply_path, device)
 
 # timestamp and ground truth image
 t = 1
-image_path = 'gt_image.png'  # !!!!!  here! replace by path of 1st frame ground truth image !!!!!!!
-gt_image_tensor, w, h = extract_image_data(image_path)
+# !!!!!  here! replace by path of 1st frame ground truth image !!!!!!!
+'''
+for testing, we are using the second frame from video 0
+small code block just to get correct viewing mat, width and height from the JSON files from colmap for frame 1, camera from 0
+'''
+image_path = os.path.join('..', 'gaussian_splats', 'ordered_output', 'vid_frame00002', 'frame_from_0.png')
+gt_image_tensor = extract_image_data(image_path)[0]
+'''
+start of code block fror JSON file extraction
+'''
+json_path = os.path.join('..', 'gaussian_splats', 'colmap_output', 'colmap_00002', 'transforms.json')
+f = open(json_path)
 num_channels = gt_image_tensor.shape[-1]
 
-
+data = json.load(f)
+f.close()
+del f
+w = data['w']
+h = data['h']
+Ks = torch.Tensor([[[data['fl_x'], 0, data['cx']], [0, data['fl_y'], data['cy']], [0, 0, 1]]]).to(device)
+viewmats = torch.Tensor([data['frames'][0]['transform_matrix']]).to(device)
+'''
+end of codeblock
+'''
 
 model = DeformationNetworkSeparate().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -83,17 +101,20 @@ for epoch in range(epochs):
     scales = scales_tensor
     colors = colors_tensor
     opacities = opacities_tensor
-    viewmats = torch.eye(4, device=device)[None, :, :]
-    Ks = torch.tensor([[300., 0., 150.], [0., 300., 100.], [0., 0., 1.]], device=device)[None, :, :]
 
     # Randomly generate rendered_rgb and rendered_alphas for testing
     # rendered_rgb = torch.rand((1, h, w, 3), device=device, requires_grad=True)
     # rendered_alphas = torch.rand((1, h, w, 1), device=device, requires_grad=True)
     rendered_rgb, rendered_alphas, meta = rasterization(means, quats, scales, opacities, colors, viewmats, Ks, w, h)
 
+    print('tiles_per_gauss shape  is: ', meta['tiles_per_gauss'].shape)
+    print('isect_ids shape  is: ', meta['isect_ids'].shape)
+    print('flatten_ids shape  is: ', meta['flatten_ids'].shape)
+    print('isect_offsets shape  is: ', meta['isect_offsets'].shape)
+
     rendered_rgb = rendered_rgb.squeeze(0)
     rendered_alphas = rendered_alphas.squeeze(0)
-    if num_channels == 4 :
+    if num_channels == 4:
         # image with alpha channel
         rendered_image = torch.cat((rendered_rgb, rendered_alphas), dim=-1)
     else:
@@ -108,10 +129,3 @@ for epoch in range(epochs):
     optimizer.step()
 
     print(f'Epoch [{epoch + 1}/{epochs}], Loss: {l1_loss.item()}')
-
-
-
-
-
-
-
