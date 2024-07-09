@@ -5,7 +5,7 @@ from gaussian_utils import inverse_sigmoid, BasicPointCloud, RGB2SH
 from torch import nn
 from plyfile import PlyData, PlyElement
 
-from simple_knn._C import distCUDA2
+# from simple_knn._C import distCUDA2
 
 
 
@@ -318,7 +318,7 @@ class GaussianModel:
         rots[:, 0] = 1
 
         opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
-        print("Number of points at initialisation : ", fused_point_cloud.shape[0])
+        print("Number of Gaussian Points at initialisation : ", fused_point_cloud.shape[0])
 
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
         # self._deformation = self._deformation.to("cuda")
@@ -372,7 +372,7 @@ class GaussianModel:
         rots = np.zeros((xyz.shape[0], len(rot_names)))
         for idx, attr_name in enumerate(rot_names):
             rots[:, idx] = np.asarray(plydata.elements[0][attr_name])
-        print('Number of points from ply:', xyz.shape[0])
+        print('Number of Gaussian Points from ply:', xyz.shape[0])
 
         self._xyz = nn.Parameter(torch.tensor(xyz, dtype=torch.float, device="cuda").requires_grad_(True))
         self._features_dc = nn.Parameter(torch.tensor(features_dc, dtype=torch.float, device="cuda").transpose(1, 2).contiguous().requires_grad_(True))

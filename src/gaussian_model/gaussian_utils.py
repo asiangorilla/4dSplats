@@ -127,3 +127,4 @@ class BasicPointCloud(NamedTuple):
     points : np.array
     colors : np.array
     normals : np.array
+
