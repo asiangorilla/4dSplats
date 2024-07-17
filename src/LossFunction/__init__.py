@@ -10,7 +10,7 @@ def l1_loss(img1, img2):
 
 
 # SSIM Loss
-def compute_ssim(img1, img2, window_size=11, size_average=True):
+def compute_ssim(img1, img2, window_size=11):
 
     channel = img1.size(-3)  # Get the number of channels, RGB or RGBA
     window = create_window(window_size, channel)  # Create a Gaussian window filter
@@ -19,7 +19,7 @@ def compute_ssim(img1, img2, window_size=11, size_average=True):
         window = window.cuda(img1.get_device())
     window = window.type_as(img1)
 
-    return _ssim(img1, img2, window, window_size, channel, size_average)  # Calculate SSIM using the defined window
+    return _ssim(img1, img2, window, window_size, channel)  # Calculate SSIM using the defined window
 
 
 def create_window(window_size, channel):
